@@ -80,6 +80,8 @@ def style(s, fg_color_str_or_dict):
 # then print_list prints each element in:
 # StackSummary.from_list(extracted_list).format()
 
+_last_frame_to_focus_idx = None
+_n_frames_to_skip = 0
 def format_exception(etype, value, tb, limit=None,
     emphasis_prefix='>', deemphasis_prefix=' ',
     emphasis_prefix_replace=True, deemphasis_prefix_replace=False,
@@ -95,6 +97,10 @@ def format_exception(etype, value, tb, limit=None,
 
     See `style` for appropriate input to `*_style` kwargs.
     """
+    # etype and value are only used at the end, not in formatting traceback.
+    global _last_frame_to_focus_idx
+    global _n_frames_to_skip
+
     if files_to_emphasize is None:
         files_to_emphasize = _emph_file_test_fn
     emph_file_test_fn = files_to_emphasize
@@ -119,6 +125,10 @@ def format_exception(etype, value, tb, limit=None,
     for i, frame_summary in enumerate(stack_summary):
         if emph_file_test_fn and emph_file_test_fn(frame_summary.filename):
             emphasis_idx = i
+
+    if emphasis_idx is not None:
+        _last_frame_to_focus_idx = emphasis_idx
+        _n_frames_to_skip = (len(stack_summary) - 1) - emphasis_idx
 
     stylized_emph_prefix = style(emphasis_prefix, emphasis_prefix_style)
     def modify_line(single_line, emph=True):
@@ -197,6 +207,83 @@ def print_exception(etype, value, tb, **kwargs):
         print(line, file=sys.stderr, end='')
 
 
+def ipdb__init_pdb(context=3, commands=[], **kwargs):
+    """Adds `kwargs` passed to debugger constructor"""
+    import ipdb
+    try:
+        p = ipdb.__main__.debugger_cls(context=context, **kwargs)
+    except TypeError:
+        p = ipdb.__main__.debugger_cls(**kwargs)
+    p.rcLines.extend(commands)
+    return p
+
+
+def ipdb_post_mortem(tb=None, **kwargs):
+    """Adds `kwargs` passed to debugger constructor"""
+    import ipdb
+    ipdb.__main__.wrap_sys_excepthook()
+    p = ipdb.__main__._init_pdb(**kwargs)
+    p.reset()
+    if tb is None:
+        tb = sys.exc_info()[2]
+    if tb:
+        p.interaction(None, tb)
+
+
+def monkey_patch_ipdb():
+    import ipdb
+    ipdb.__main__._init_pdb = ipdb__init_pdb
+    ipdb.__main__.post_mortem = ipdb_post_mortem
+    ipdb.post_mortem = ipdb_post_mortem
+
+
+def pdb_post_mortem(t=None, **kwargs):
+    """Same as in cpython source, apart from addition of `kwargs`."""
+    import pdb
+    # handling the default
+    if t is None:
+        # sys.exc_info() returns (type, value, traceback) if an exception is
+        # being handled, otherwise it returns None
+        t = sys.exc_info()[2]
+    if t is None:
+        raise ValueError("A valid traceback must be passed if no "
+                         "exception is being handled")
+    p = pdb.Pdb(**kwargs)
+    p.reset()
+    p.interaction(None, t)
+
+
+''''
+def tb_head(tb, n):
+    # TODO TODO fallback if python version doesn't support this
+    # (prob before calling this fn / raise err / ret None)
+    from types import TracebackType
+    assert type(n) is int and n > 0
+
+    tb_list = []
+    curr_tb = tb
+    #for i in range(n - 1):
+    for i in range(n):
+        tb_list.append(curr_tb)
+        curr_tb = tb.tb_next
+    # Tried this, but attribute is not writable
+    #curr_tb.tb_next = None
+
+    for i, t in enumerate(tb_list[::-1]):
+        new_tb = TracebackType(
+            None if i == 0 else new_tb, t.tb_frame, t.tb_lasti, t.tb_lineno
+        )
+    return new_tb
+
+
+def ith_frame(tb, i):
+    for j, (frame, lineno) in enumerate(traceback.walk_tb(tb)):
+        if j == i:
+            return frame
+    raise IndexError('ran out of frames before i={}'.format(i))
+'''
+
+
 def excepthook(etype, value, tb):
     # RHS check is *not* equivalent to `sys.flags.interactive`.
     # It is the appropriate check here.
@@ -207,57 +294,42 @@ def excepthook(etype, value, tb):
     else:
         print_exception(etype, value, tb)
 
-        # maybe start `ipdb` as he mentions you could start `code`?
-        # (can `code.interact` do anything not in `ipdb.post_mortem()`?)
+        # TODO if possible, initialize debugger to deepest frame that was
+        # in some of my code
         # https://stackoverflow.com/questions/242485
-        get_last_tb = \
-            lambda tb=tb: get_last_tb(tb.tb_next) if tb.tb_next else tb
-        last_tb = get_last_tb()
-        last_frame = last_tb.tb_frame
-        import ipdb; ipdb.set_trace()
-
-        # TODO TODO maybe having the locals are what it would take to
-        # successfully init a debugging an an arbitrary frame (as i want to
-        # below)? (and it doesn't seem tb passed to excepthook provides them)
-
-        # TODO maybe make all lines but the line of interest a little darker
-        # than usual terminal white color? or add space after [+ before?] line?
-        # or is there a good color to make the line more noticeable
-        # (white is pretty easy to read though...)?
-        # caret pointing to offending line?
-
-        # TODO TODO if possible, initialize debugger to deepest frame that was
-        # in some of my code (so probably test [installed w/ pip + editable] OR
-        # not installed?)
         # (seems like it would be possible w/ SO post `code` approach, but
         # [i]pdb (and in a way that deeper frames beyond my code could still be
         # reached?)
+        # starting to feel like it may not be possible...
 
-        # TODO from !help(ipdb.set_trace), it has a frame kwarg.
-        # would passing a frame from tb produce similar effect to postmortem?
-        # just set_trace w/ the old frame then? anything specific to post
-        # mortem that i actually want?
-        # TODO some unique ID for current execution point / context (frame?)
-        # that same in set_trace(frame=frame) and post_mortem(tb)? check?
-        #import ipdb
-        # TODO maybe try w/ "first" frame? change language to highest / deepest
-        # probably (or oldest / newest)
-        #ipdb.set_trace(frame=last_frame)
+        # Would only work in Python3.7. Not possible to modify traceback
+        # from Python code before that.
+        #tbh = tb_head(tb, _last_frame_to_focus_idx + 1)
+        #print_exception(etype, value, tbh)
 
-        # TODO TODO maybe copy some of ipdb.post_mortem / ipdb.set_trace source?
-        # (if ipdb available, cause would prob need their dependencies)
+        # didn't work.
+        #frame = ith_frame(tb, _last_frame_to_focus_idx)
+        #import ipdb; ipdb.set_trace(frame=frame)
+        # neighter did walking back from tb.tb_frame w/ frame.f_back
 
-        # TODO uncomment this code if can't get set_trace() above to do more of
-        # what i want
-        '''
         try:
+            # This will trigger the same ImportError.
+            # Needs to come first, otherwise the `post_mortem` returned by the
+            # import will point to the original thing.
+            monkey_patch_ipdb()
             from ipdb import post_mortem
+            post_mortem(tb, commands=['u'] * _n_frames_to_skip)
+
         except ImportError:
+            # changing the skip kwarg here did not seem to affect anything...
+            #pdb_post_mortem(tb, skip=['pandas*'])
             from pdb import post_mortem
 
-        # TODO it looks like this also screws with sys.excepthook
-        # (from looking at code). maybe set it back to mine after call?
-        # the current behavior may be what i want.
-        post_mortem(tb)
-        '''
+            if _n_frames_to_skip > 0:
+                print('You will need to step up {} stack frames'.format(
+                    _n_frames_to_skip
+                ))
+
+            # TODO possible to pass commands here? i don't feel like it was...
+            post_mortem(tb)
 
