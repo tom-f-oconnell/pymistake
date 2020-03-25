@@ -6,6 +6,7 @@ options.
 
 from __future__ import print_function
 
+import os
 import sys
 import traceback
 
@@ -73,12 +74,6 @@ def style(s, fg_color_str_or_dict):
 # - Example use: https://github.com/sentientmachine/\
 #   erics_vim_syntax_and_color_highlighting/blob/master/usercustomize.py
 # https://github.com/nir0s/backtrace
-
-# traceback.print_tb seems equivalent to print(''.join(traceback.format_tb(tb)))
-# (in cpython source code, this is what it actually is:
-# traceback.print_list(traceback.extract_tb(tb, limit=limit), file=file)
-# then print_list prints each element in:
-# StackSummary.from_list(extracted_list).format()
 
 _last_frame_to_focus_idx = None
 _n_frames_to_skip = 0
@@ -187,7 +182,6 @@ def format_exception(etype, value, tb, limit=None,
             if post_emphasis_delim:
                 new_line = post_emphasis_delim + new_line
                 post_emphasis_delim = None
-
         else:
             new_line = line
 
@@ -237,51 +231,84 @@ def monkey_patch_ipdb():
     ipdb.post_mortem = ipdb_post_mortem
 
 
-def pdb_post_mortem(t=None, **kwargs):
-    """Same as in cpython source, apart from addition of `kwargs`."""
+_pdb_up_n_lines = None
+# Copied from cpython pdb source.
+def pdb_interaction(self, frame, traceback):
+    """
+    Same as in cpython `pdb` source, except manipulation of `sys.stdout`
+    (and, in the case where `ipdb` is not available, of `.pdbrc`).
+    """
+    global _pdb_up_n_lines
+
+    from pdb import Pdb
+    import signal
+
+    # Restore the previous signal handler at the Pdb prompt.
+    # TODO TODO TODO fix the error this line throws (no attribute)
+    # (in !ipdb case only)
+    # (it it `None` as a variable defined inside `Pdb` class def... why
+    # is it not set here???)
+    if Pdb._previous_sigint_handler:
+        try:
+            signal.signal(signal.SIGINT, Pdb._previous_sigint_handler)
+        except ValueError:  # ValueError: signal only works in main thread
+            pass
+        else:
+            Pdb._previous_sigint_handler = None
+
+    f = open(os.devnull, 'w')
+    last_stdout = sys.stdout
+    sys.stdout = f
+
+    try:
+        import ipdb
+        have_ipdb = True
+    except ImportError:
+        assert _pdb_up_n_lines is not None
+        have_ipdb = False
+
+        pdbrc = os.path.expanduser('~/.pdbrc')
+        if not os.path.isfile(pdbrc):
+            orig_pdbrc_data = ''
+        else:
+            with open(pdbrc, 'r') as f:
+                orig_pdbrc_data = f.read()
+
+        cmd_lines = ['u'] * _pdb_up_n_lines
+        # may not work in windows case
+        pdbrc_data = orig_pdbrc_data + '\n'.join(cmd_lines)
+
+        with open(pdbrc, 'w') as f:
+            f.write(pdbrc_data)
+
+    # This is the line that ultimately excecute commands in .pdbrc
+    if self.setup(frame, traceback):
+        # no interaction desired at this time (happens if .pdbrc contains
+        # a command like "continue")
+        self.forget()
+        return
+
+    sys.stdout = last_stdout
+    if not have_ipdb:
+        if len(orig_pdbrc_data) > 0:
+            with open(pdbrc, 'w') as f:
+                f.write(orig_pdbrc_data)
+        else:
+            os.remove(pdbrc)
+
+    self.print_stack_entry(self.stack[self.curindex])
+    _pdb_up_n_lines = None
+    self._cmdloop()
+    self.forget()
+
+
+def monkey_patch_pdb():
+    """
+    Change `pdb.interaction` to only show output right before entering command
+    loop again.
+    """
     import pdb
-    # handling the default
-    if t is None:
-        # sys.exc_info() returns (type, value, traceback) if an exception is
-        # being handled, otherwise it returns None
-        t = sys.exc_info()[2]
-    if t is None:
-        raise ValueError("A valid traceback must be passed if no "
-                         "exception is being handled")
-    p = pdb.Pdb(**kwargs)
-    p.reset()
-    p.interaction(None, t)
-
-
-''''
-def tb_head(tb, n):
-    # TODO TODO fallback if python version doesn't support this
-    # (prob before calling this fn / raise err / ret None)
-    from types import TracebackType
-    assert type(n) is int and n > 0
-
-    tb_list = []
-    curr_tb = tb
-    #for i in range(n - 1):
-    for i in range(n):
-        tb_list.append(curr_tb)
-        curr_tb = tb.tb_next
-    # Tried this, but attribute is not writable
-    #curr_tb.tb_next = None
-
-    for i, t in enumerate(tb_list[::-1]):
-        new_tb = TracebackType(
-            None if i == 0 else new_tb, t.tb_frame, t.tb_lasti, t.tb_lineno
-        )
-    return new_tb
-
-
-def ith_frame(tb, i):
-    for j, (frame, lineno) in enumerate(traceback.walk_tb(tb)):
-        if j == i:
-            return frame
-    raise IndexError('ran out of frames before i={}'.format(i))
-'''
+    pdb.Pdb.interaction = pdb_interaction
 
 
 def excepthook(etype, value, tb):
@@ -294,41 +321,45 @@ def excepthook(etype, value, tb):
     else:
         print_exception(etype, value, tb)
 
-        # TODO if possible, initialize debugger to deepest frame that was
-        # in some of my code
-        # https://stackoverflow.com/questions/242485
-        # (seems like it would be possible w/ SO post `code` approach, but
-        # [i]pdb (and in a way that deeper frames beyond my code could still be
-        # reached?)
-        # starting to feel like it may not be possible...
+        start_post_mortem = os.getenv('PYTHON_DEBUG_UNCAUGHT')
+        # TODO parse it from a 1/0 flag to bool (or whatever is most common for
+        # boolean environment variables)
+        if not start_post_mortem:
+            return 
+        try:
+            start_post_mortem = bool(int(start_post_mortem))
+            if not start_post_mortem:
+                return
+        except ValueError:
+            return
+        del start_post_mortem
 
-        # Would only work in Python3.7. Not possible to modify traceback
-        # from Python code before that.
-        #tbh = tb_head(tb, _last_frame_to_focus_idx + 1)
-        #print_exception(etype, value, tbh)
-
-        # didn't work.
-        #frame = ith_frame(tb, _last_frame_to_focus_idx)
-        #import ipdb; ipdb.set_trace(frame=frame)
-        # neighter did walking back from tb.tb_frame w/ frame.f_back
-
+        monkey_patch_pdb()
         try:
             # This will trigger the same ImportError.
             # Needs to come first, otherwise the `post_mortem` returned by the
             # import will point to the original thing.
             monkey_patch_ipdb()
+            #print('HAVE IPDB1')
             from ipdb import post_mortem
+            #print('HAVE IPDB2')
             post_mortem(tb, commands=['u'] * _n_frames_to_skip)
 
         except ImportError:
+            #print('NO IPDB')
+            # TODO find some other way to support moving pdb to the correct
+            # frame! (maybe modify `.pdbrc` right before, and then set it back?)
+
             # changing the skip kwarg here did not seem to affect anything...
             #pdb_post_mortem(tb, skip=['pandas*'])
             from pdb import post_mortem
 
+            '''
             if _n_frames_to_skip > 0:
                 print('You will need to step up {} stack frames'.format(
                     _n_frames_to_skip
                 ))
+            '''
 
             # TODO possible to pass commands here? i don't feel like it was...
             post_mortem(tb)

@@ -1,0 +1,37 @@
+(caiman) tom@atlas:~/src/chemutils/test$ ./test_pubchemprops_string_parsing.py 
+Line 7
+"In water, 0.6 wt% (6000 mg/L) at 20 °C"
+
+TEMPERATURE MATCHED: 20.0 degree_Celsius
+NO SOURCE MATCHED
+NO RANGE FOUND
+PARTS: ['In', 'water,', '0.6', 'wt%', '(6000', 'mg/L)']
+REMAINING PARTS: ['In', 'water,', 'wt%', '(6000', 'mg/L)']
+Traceback (most recent call last):
+  File "./test_pubchemprops_string_parsing.py", line 43, in <module>
+    test_solubility_parsing()
+  File "./test_pubchemprops_string_parsing.py", line 26, in test_solubility_parsing
+    expected_units=expected_units
+  File "/home/tom/src/chemutils/chemutils.py", line 1595, in parse_pubchemprops_string
+    curr_units = ureg.parse_units(p)
+  File "/home/tom/anaconda3/envs/caiman/lib/python3.6/site-packages/pint/registry.py", line 1024, in parse_units
+    units = self._parse_units(input_string, as_delta)
+  File "/home/tom/anaconda3/envs/caiman/lib/python3.6/site-packages/pint/registry.py", line 1167, in _parse_units
+    return super()._parse_units(input_string, as_delta)
+  File "/home/tom/anaconda3/envs/caiman/lib/python3.6/site-packages/pint/registry.py", line 1045, in _parse_units
+    units = ParserHelper.from_string(input_string)
+  File "/home/tom/anaconda3/envs/caiman/lib/python3.6/site-packages/pint/util.py", line 574, in from_string
+    ret = build_eval_tree(gen).evaluate(cls.eval_token)
+  File "/home/tom/anaconda3/envs/caiman/lib/python3.6/site-packages/pint/pint_eval.py", line 129, in build_eval_tree
+    tokens = list(tokens)
+  File "/home/tom/anaconda3/envs/caiman/lib/python3.6/site-packages/pint/compat.py", line 30, in tokenizer
+    for tokinfo in tokenize.tokenize(BytesIO(input_string.encode("utf-8")).readline):
+> File "/home/tom/anaconda3/envs/caiman/lib/python3.6/tokenize.py", line 602, in _tokenize
+>   raise TokenError("EOF in multi-line statement", (lnum, 0))
+
+tokenize.TokenError: ('EOF in multi-line statement', (2, 0))
+> /home/tom/anaconda3/envs/caiman/lib/python3.6/tokenize.py(602)_tokenize()
+    601             if not line:
+--> 602                 raise TokenError("EOF in multi-line statement", (lnum, 0))
+    603             continued = 0
+
