@@ -9,6 +9,34 @@ from __future__ import print_function
 import os
 import sys
 import traceback
+import warnings
+
+
+def get_bool_env_var(var, default=True):
+    if var in os.environ:
+        val = os.environ[var]
+        # Should be guaranteed anyway, since we already checked it's there.
+        assert type(val) is str
+        orig_val = str(val)
+        try:
+            val = bool(int(val))
+            valid_flag = True
+        except ValueError:
+            val = default
+            valid_flag = False
+
+        if valid_flag and val not in (0, 1):
+            valid_flag = False
+
+        if not valid_flag:
+            warn_str = 'invalid value of flag {}: {}\n(must be 0 or 1)'.format(
+                var, orig_val
+            )
+            warnings.warn(warn_str)
+    else:
+        assert type(default) is bool, 'default must be of type bool!'
+        val = default
+    return val
 
 
 _emph_file_test_fn = None
@@ -312,6 +340,8 @@ def monkey_patch_pdb():
 
 
 def excepthook(etype, value, tb):
+    # TODO allow customizing which errors to skip w/ some kind of config file?
+
     # RHS check is *not* equivalent to `sys.flags.interactive`.
     # It is the appropriate check here.
     if issubclass(etype, SyntaxError) or hasattr(sys, 'ps1'):
@@ -321,9 +351,9 @@ def excepthook(etype, value, tb):
     else:
         print_exception(etype, value, tb)
 
-        start_post_mortem = os.getenv('PYTHON_DEBUG_UNCAUGHT')
-        # TODO parse it from a 1/0 flag to bool (or whatever is most common for
-        # boolean environment variables)
+        start_post_mortem = get_bool_env_var('PYMISTAKE_DEBUG_UNCAUGHT',
+            default=True
+        )
         if not start_post_mortem:
             return 
         try:
