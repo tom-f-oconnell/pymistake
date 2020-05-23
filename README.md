@@ -39,7 +39,7 @@ These examples were generated using the `example.py` in this repo, which also
 requires `pandas`. The exact version of `pandas` specified in
 `example_requirements.txt` should allow you to reproduce the example images
 below. I had `ipdb` installed for the Python I used to generate these examples,
-though `pdb` should also work, any will give you similar output.
+though `pdb` should also work, and will give you similar output.
 
 ![Example with all features enabled](docs/screenshots/enabled.png)
 In the above image, note the `>` character to the left of one of the pairs of
