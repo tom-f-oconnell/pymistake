@@ -211,7 +211,6 @@ def under_dir_in_list(dir_list, abs_path):
            multiple directories). If path is not splittable, assumed to belong
            to this category.
     """
-    #print('UNDER_DIR_IN_LIST({}, {})'.format(dir_list, abs_path))
     return any([dirname_matches_path(d, abs_path) for d in dir_list])
 
 

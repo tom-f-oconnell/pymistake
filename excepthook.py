@@ -78,8 +78,7 @@ def style(s, fg_color_str_or_dict):
 #   erics_vim_syntax_and_color_highlighting/blob/master/usercustomize.py
 # https://github.com/nir0s/backtrace
 
-_last_frame_to_focus_idx = None
-_n_frames_to_skip = 0
+_n_frames_to_skip = None
 def format_exception(etype, value, tb, limit=None,
     emphasis_prefix='>', deemphasis_prefix=' ',
     emphasis_prefix_replace=True, deemphasis_prefix_replace=False,
@@ -96,7 +95,6 @@ def format_exception(etype, value, tb, limit=None,
     See `style` for appropriate input to `*_style` kwargs.
     """
     # etype and value are only used at the end, not in formatting traceback.
-    global _last_frame_to_focus_idx
     global _n_frames_to_skip
 
     if files_to_emphasize is None:
@@ -139,8 +137,8 @@ def format_exception(etype, value, tb, limit=None,
             if should_emph:
                 emphasis_idx = i
 
+    _n_frames_to_skip = 0
     if emphasis_idx is not None:
-        _last_frame_to_focus_idx = emphasis_idx
         # TODO was there some reason i couldn't count this with a separate fn?
         # try to factor out, so printing can be left to default without losing 
         # the ability to compute this!!!
@@ -252,21 +250,24 @@ def monkey_patch_ipdb():
     ipdb.post_mortem = ipdb_post_mortem
 
 
-_pdb_up_n_lines = None
+# TODO maybe expose this as an environment variable, for configuration
+STDOUT_TO_NULL_IN_INTERACT = True
+
+# TODO summarize how this function works
 # Copied from cpython pdb source.
 def pdb_interaction(self, frame, traceback):
     """
     Same as in cpython `pdb` source, except manipulation of `sys.stdout`
     (and, in the case where `ipdb` is not available, of `.pdbrc`).
     """
-    global _pdb_up_n_lines
+    global _n_frames_to_skip
 
     from pdb import Pdb
     import signal
 
     # Restore the previous signal handler at the Pdb prompt.
-    # TODO TODO TODO fix the error this line throws (no attribute)
-    # (in !ipdb case only)
+    # TODO TODO fix the error this line throws (no attribute)
+    # (in !ipdb case only) (still relevant?)
     # (it it `None` as a variable defined inside `Pdb` class def... why
     # is it not set here???)
     if Pdb._previous_sigint_handler:
@@ -277,48 +278,41 @@ def pdb_interaction(self, frame, traceback):
         else:
             Pdb._previous_sigint_handler = None
 
-    f = open(os.devnull, 'w')
-    last_stdout = sys.stdout
-    sys.stdout = f
+    if STDOUT_TO_NULL_IN_INTERACT:
+        f = open(os.devnull, 'w')
+        self.stdout = f
 
     try:
         import ipdb
         have_ipdb = True
-    except ImportError:
-        assert _pdb_up_n_lines is not None
+    except (ModuleNotFoundError, ImportError) as e:
         have_ipdb = False
+        assert _n_frames_to_skip is not None, 'call format_exception first'
+        cmd_lines = ['u'] * _n_frames_to_skip
+        self.rcLines.extend(cmd_lines)
 
-        pdbrc = os.path.expanduser('~/.pdbrc')
-        if not os.path.isfile(pdbrc):
-            orig_pdbrc_data = ''
-        else:
-            with open(pdbrc, 'r') as f:
-                orig_pdbrc_data = f.read()
-
-        cmd_lines = ['u'] * _pdb_up_n_lines
-        # may not work in windows case
-        pdbrc_data = orig_pdbrc_data + '\n'.join(cmd_lines)
-
-        with open(pdbrc, 'w') as f:
-            f.write(pdbrc_data)
-
-    # This is the line that ultimately excecute commands in .pdbrc
+    # This is the line that ultimately excecute commands in ~/.pdbrc
+    # (or lines that we manually add to self.rcLines, in this case)
     if self.setup(frame, traceback):
         # no interaction desired at this time (happens if .pdbrc contains
         # a command like "continue")
+        # TODO what is the .forget() call really doing though?
+        # (summarize here)
         self.forget()
+        # TODO when does this return happen?
         return
 
-    sys.stdout = last_stdout
-    if not have_ipdb:
-        if len(orig_pdbrc_data) > 0:
-            with open(pdbrc, 'w') as f:
-                f.write(orig_pdbrc_data)
-        else:
-            os.remove(pdbrc)
+    # TODO TODO as there is the return above, maybe the appropriate time to
+    # re-enable is somewhere else? (need to think about when the early return is
+    # triggered, even if it isn't always). when is that branch followed?
+    if STDOUT_TO_NULL_IN_INTERACT:
+        self.stdout = sys.stdout
 
     self.print_stack_entry(self.stack[self.curindex])
-    _pdb_up_n_lines = None
+    # TODO TODO double check that it's not a problem for the `ipdb` case to set
+    # this to `None` here. if it is, could maybe just only set this in the `pdb`
+    # case?
+    _n_frames_to_skip = None
     self._cmdloop()
     self.forget()
 
@@ -349,6 +343,7 @@ def excepthook(etype, value, tb):
             # TODO TODO TODO document ways in which moving the debugger up the
             # correct number of frames depends on this custom printing function
             # (and try to rewrite so there is no such dependence)
+            # (rewriting is more important than documenting, if possible)
             print_exception(etype, value, tb)
         else:
             traceback.print_exception(etype, value, tb)
@@ -360,34 +355,29 @@ def excepthook(etype, value, tb):
             return 
         del start_post_mortem
 
-        # TODO is this also necessary for ipdb case? i think it was, but
-        # double check, and only run if needed
+        # TODO document what this provides in pdb / ipdb case (same in latter?)
         monkey_patch_pdb()
         try:
-            # This will trigger the same ImportError.
+            # This will trigger the same ImportError (seems now it's a 
+            # ModuleNotFoundError...).
             # Needs to come first, otherwise the `post_mortem` returned by the
             # import will point to the original thing.
             monkey_patch_ipdb()
-            #print('HAVE IPDB1')
             from ipdb import post_mortem
-            #print('HAVE IPDB2')
+
+            if _debug:
+                print('JUST BEFORE CALLING IPDB.POST_MORTEM(tb, ...)')
+
+            assert _n_frames_to_skip is not None, 'call format_exception first'
             post_mortem(tb, commands=['u'] * _n_frames_to_skip)
 
-        except ImportError:
-            #print('NO IPDB')
-            # TODO find some other way to support moving pdb to the correct
-            # frame! (maybe modify `.pdbrc` right before, and then set it back?)
-
-            # changing the skip kwarg here did not seem to affect anything...
-            #pdb_post_mortem(tb, skip=['pandas*'])
+        # TODO is there some python version where this really was supposed to be
+        # an ImportError, rather than a ModuleNotFoundError?? what is the
+        # difference between them.
+        # This will be triggered by the first line of `monkey_patch_ipdb`, not
+        # by the import in this function, that happens immediately after that
+        # first call to `monkey_patch_ipdb`.
+        except (ModuleNotFoundError, ImportError) as e:
             from pdb import post_mortem
-
-            '''
-            if _n_frames_to_skip > 0:
-                print('You will need to step up {} stack frames'.format(
-                    _n_frames_to_skip
-                ))
-            '''
-            # TODO possible to pass commands here? i don't feel like it was...
             post_mortem(tb)
 
