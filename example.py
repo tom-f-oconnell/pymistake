@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 import pandas as pd
 
@@ -14,10 +14,6 @@ def main():
     df = pd.read_csv(url)
     # 'sepal_len' is NOT among the columns of `df`, so this will cause an error
     df.set_index(['sepal_len'])
-
-    # TODO fix double print of ipdb lines in (actually i think it's desired.
-    # it's stepping up so the debugger is started in our code.)
-    #import ipdb; ipdb.set_trace()
 
 
 if __name__ == '__main__':

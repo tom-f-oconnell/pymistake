@@ -9,8 +9,8 @@ from __future__ import print_function
 import os
 import sys
 
-from util import script_is_attended, is_dev_file
-from excepthook import excepthook, set_file_filter, get_bool_env_var
+from util import script_is_attended, is_dev_file, get_bool_env_var
+from excepthook import excepthook, set_file_filter
 
 
 # Note: be careful not to always hook in somthing that only works for

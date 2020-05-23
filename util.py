@@ -8,6 +8,35 @@ import site
 import warnings
 
 
+def get_bool_env_var(var, default=True):
+    if var in os.environ:
+        val = os.environ[var]
+        # Should be guaranteed anyway, since we already checked it's there.
+        assert type(val) is str
+        orig_val = str(val)
+        try:
+            val = bool(int(val))
+            valid_flag = True
+        except ValueError:
+            val = default
+            valid_flag = False
+
+        if valid_flag and val not in (True, False):
+            valid_flag = False
+
+        if not valid_flag:
+            warn_str = 'invalid value of flag {}: {}\n(must be 0 or 1)'.format(
+                var, orig_val
+            )
+            warnings.warn(warn_str)
+    else:
+        assert type(default) is bool, 'default must be of type bool!'
+        val = default
+    return val
+
+_debug = get_bool_env_var('PYMISTAKE_DEBUG', default=False)
+
+
 def script_is_attended():
     # There may be some circumstances where this does not behave how I want.
     # Could also test __stdout__ in those cases, but it would probably be likely
@@ -188,7 +217,7 @@ def under_dir_in_list(dir_list, abs_path):
 
 dev_dirs = None
 non_dev_dirs = None
-def is_dev_file(f, _debug=False):
+def is_dev_file(f, _debug=_debug):
     """Returns whether it seems file at path `f` is being developed locally.
     """
     global dev_dirs
@@ -206,16 +235,36 @@ def is_dev_file(f, _debug=False):
             print('BLACKLIST DIRS:', non_dev_dirs)
             print()
 
+    # So far, this seems to be an effective filter for files that are not
+    # locally being developed, as an example, the one error contained these
+    # traceback lines:
+    # File "/home/.../venv/lib/python3.6/site-packages/pandas/.../base.py", ...
+    # File "pandas/_libs/index.pyx", line 108, in pandas._libs.index.Index...
+    # where the second line does not refer to a file if treated as a relative
+    # path from where the Python script was run.
+
+    # TODO determine whether filtering cython extensions (.pxi,.pyx,probably
+    # more), or things like that, would be safer than the current isfile check
+    # TODO but this filter could in theory have false positives, if this did
+    # happen to be a valid relative path, but the relative path need not refer
+    # to the file actually responsible for the error in this case. better test.
+    if not os.path.isfile(f):
+        if _debug:
+            print(f, 'IS REAL FILE?', os.path.isfile(f))
+        return False
+
     f = abspath(f)
 
+    # TODO TODO maybe the precedence between white and blacklist should always
+    # go to whichever is more specific for a file / directory?
     if under_dir_in_list(non_dev_dirs, f):
         if _debug:
-            print('BLACKLIST')
+            print(f, 'WAS ON BLACKLIST')
         return False
 
     if under_dir_in_list(dev_dirs, f):
         if _debug:
-            print('WHITELIST')
+            print(f, 'WAS ON WHITELIST')
         return True
 
     try:
@@ -228,6 +277,10 @@ def is_dev_file(f, _debug=False):
         print('IN WHITELIST?', under_dir_in_list(dev_dirs, f))
         print('IN BLACKLIST?', under_dir_in_list(non_dev_dirs, f))
 
+    # TODO TODO TODO how important was this again?
+    # document what is gained by installing this, and if it's actually
+    # important, maybe include it in a requirements.txt (or at least a version
+    # of that is clear to be "recommended", not strictly required)?
     if have_pip:
         pip_module_info = file_pip_module_info(f)
         if pip_module_info:

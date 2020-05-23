@@ -73,9 +73,9 @@ postmortem debugging of uncaught errors is enabled. One thing to note in this
 example is that the debugger did not move "up" one frame like in the first
 example . This is because a dependence of the code that counts how many frames
 to move up on the custom traceback printing code. I could potentially remove
-this limitation in the future, but for now, if you want to automatically move up
-into a frame from your code, you need to leave the custom traceback printing
-enabled.
+this limitation in the future, but for now, if you want the postmortem `ipdb`
+debugger to automatically move up so that it starts inside your code, you need
+to leave the custom traceback printing enabled.
 
 
 ## Installation
@@ -104,6 +104,9 @@ if [ -d $PYMISTAKE_PATH ]; then
   # `pymistake`. See the "Configuration" section below.
 fi
 ```
+
+So that the above changes to `~/.bashrc` take effect, either make a new
+terminal, or run `source ~/.bashrc` in any existing terminals.
 
 For other shells / places you run `python`, look up instructions for how add
 directories to the `PYTHONPATH` in those environments.

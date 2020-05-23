@@ -11,32 +11,7 @@ import sys
 import traceback
 import warnings
 
-
-def get_bool_env_var(var, default=True):
-    if var in os.environ:
-        val = os.environ[var]
-        # Should be guaranteed anyway, since we already checked it's there.
-        assert type(val) is str
-        orig_val = str(val)
-        try:
-            val = bool(int(val))
-            valid_flag = True
-        except ValueError:
-            val = default
-            valid_flag = False
-
-        if valid_flag and val not in (True, False):
-            valid_flag = False
-
-        if not valid_flag:
-            warn_str = 'invalid value of flag {}: {}\n(must be 0 or 1)'.format(
-                var, orig_val
-            )
-            warnings.warn(warn_str)
-    else:
-        assert type(default) is bool, 'default must be of type bool!'
-        val = default
-    return val
+from util import get_bool_env_var, _debug
 
 
 _emph_file_test_fn = None
@@ -145,12 +120,30 @@ def format_exception(etype, value, tb, limit=None,
     # traceback might pass from lines w/ `emph_file_test_fn` True, then False,
     # then back to True.
     emphasis_idx = None
-    for i, frame_summary in enumerate(stack_summary):
-        if emph_file_test_fn and emph_file_test_fn(frame_summary.filename):
-            emphasis_idx = i
+    if emph_file_test_fn:
+        for i, frame_summary in enumerate(stack_summary):
+            if _debug:
+                print('frame_summary index:', i)
+                print('calling test fn: ', emph_file_test_fn.__name__)
+                print()
+
+            should_emph = emph_file_test_fn(frame_summary.filename)
+            if _debug:
+                print('{}({}) = {}'.format(emph_file_test_fn.__name__,
+                    frame_summary.filename, should_emph
+                ))
+                print()
+
+            # As long as the comment above this loop stays true, no need to
+            # check anything else here.
+            if should_emph:
+                emphasis_idx = i
 
     if emphasis_idx is not None:
         _last_frame_to_focus_idx = emphasis_idx
+        # TODO was there some reason i couldn't count this with a separate fn?
+        # try to factor out, so printing can be left to default without losing 
+        # the ability to compute this!!!
         _n_frames_to_skip = (len(stack_summary) - 1) - emphasis_idx
 
     stylized_emph_prefix = style(emphasis_prefix, emphasis_prefix_style)
