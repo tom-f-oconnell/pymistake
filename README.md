@@ -15,9 +15,9 @@ modifying the behavior of your `python` interpreter in two ways:
    to exit the debugger.
 
 2. Modifies the default traceback format to highlight the last line in any of a
-   set of designed source directories, which should have source for the projects
-   you are working on. Only files under these directories should have their line
-   highlighted with `pymistake`'s modified traceback.
+   set of designated source directories, which should have source for the
+   projects you are working on. Only files under these directories should have
+   their line highlighted with `pymistake`'s modified traceback.
 
    See the "Examples" below for how this can be useful.
 
@@ -38,7 +38,7 @@ of lines when the postmortem debugger was started.
 
 ### Examples
 
-These examples were generated using the `example.py` in this script, which also
+These examples were generated using the `example.py` in this repo, which also
 requires `pandas`. I had `ipdb` installed for the Python I used to generate
 these examples.
 
@@ -48,11 +48,12 @@ lines in the traceback. `pymistake` will try to add this prefix to the last
 section of the traceback that refers to code you are developing, as well as a
 blank line following this section. These modifications are to make it more
 visually apparent where the offending part of *your* code is, as that's the code
-you most likely need to fix.
+you most likely want to fix.
 
 Again in the image above, also note the two debugger prompts. There are two
 prompts, rather than one, because the debugger moved "up" one frame, as
-described in the previous section.
+described in the previous section. If the last line in the traceback was a line
+in your code, the debugger would not move "up" at all.
 
 ![Example all features disabled](docs/screenshots/disabled.png)
 
@@ -73,7 +74,8 @@ example is that the debugger did not move "up" one frame like in the first
 example . This is because a dependence of the code that counts how many frames
 to move up on the custom traceback printing code. I could potentially remove
 this limitation in the future, but for now, if you want to automatically move up
-into a frame from your code, you need to enable the custom traceback printing.
+into a frame from your code, you need to leave the custom traceback printing
+enabled.
 
 
 ## Installation
@@ -112,6 +114,7 @@ directories to the `PYTHONPATH` in those environments.
 `pymistake` can be configured through environment variables. The available
 settings are:
 - `PYMISTAKE_DISABLE` default: `"0"`
+
    options: `"1"` enabled, `"0"` disabled
 
    If enabled, this disables *all* features of `pymistake`. This is to quickly
@@ -123,18 +126,21 @@ settings are:
    ```
 
 - `PYMISTAKE_DEBUG_UNCAUGHT` default: `"1"`
+
    options: `"1"` enabled, `"0"` disabled
 
    Set this to `"1"` if you want the modified tracebacks `pymistake` provides,
    without the automatic postmortem debugging of (most) uncaught exceptions.
 
 - `PYMISTAKE_TRACEBACK` default: `"1"`
+
    options: `"1"` enabled, `"0"` disabled
 
    Set this to `"0"` if you want your Python's usual traceback formatting, but
    perhaps still want to use the automatic postmortem debugging.
 
 - `PYMISTAKE_DEV_DIRS` default: `[os.path.expanduser('~')]`
+
    options: any list of absolute paths, ':' separated.
    '~' is acceptable in paths.
 
@@ -143,13 +149,14 @@ settings are:
    will be highlighted in the modified traceback.
 
 - `PYMISTAKE_NON_DEV_DIRS` default: `['site-packages', 'dist-packages']`
-  options: a list of paths as `PYMISTAKE_DEV_DIRS` above.
 
-  Although by default, any Python file under your home directory will be 
-  highlighted in the modified tracebacks, files under these directories are
-  excluded. The default value for this variable should exclude user / virtual
-  environment installed Python files that also happen to be under your home
-  folder.
+   options: a list of paths as `PYMISTAKE_DEV_DIRS` above.
+
+   Although by default, any Python file under your home directory will be 
+   highlighted in the modified tracebacks, files under these directories are
+   excluded. The default value for this variable should exclude user / virtual
+   environment installed Python files that also happen to be under your home
+   folder.
 
 There are currently many options to configure for the custom exception printing,
 but I have not made this configuration available through environment variables
@@ -164,11 +171,10 @@ file).
 
 Both causing uncaught errors to trigger a debugger and modifying traceback
 output have high potential to cause strange errors in programs that depend on
-your system `python`. To try to avoid changing the behavior of any of these
-programs, `pymistake` tries to determine whether code is being run
-interactively, and only becomes enabled when it detects that. See the 
-`script_is_attended()` function defined in `util.py` for details on how an
-interactive session is detected.
+your system `python`. To avoid changing the behavior of any of these programs,
+`pymistake` tries to determine whether code is being run interactively, and only
+becomes enabled when it detects that. See the `script_is_attended()` function
+defined in `util.py` for details on how an interactive session is detected.
 
 I aimed to make this work in any python above a modern release of `python2.7`,
 including any `python3`, but there may be certain pythons where `pymistake` has
@@ -182,7 +188,7 @@ support for `pdb` does not appear to work for you.
 
 ## Virtual Environments
 
-As it's currently implemented, `pymistake` will not work for any Python where:
+As it's currently implemented, `pymistake` will *not* work for any Python where:
 ```
 import site
 print(site.ENABLE_USER_SITE)
@@ -191,9 +197,10 @@ print(site.ENABLE_USER_SITE)
 `--system-site-packages` flag will have `site.ENABLE_USER_SITE == False`, and
 thus will *not* work.
 
-It may be possible to implement use `.pth` files 
-[like this](https://stackoverflow.com/questions/40484942), to extend support to
-virtual environments created without the `--system-site-packages` flag.
+It may be possible to implement what `usercustomize.py` is accomplishing with
+`.pth` files [like this](https://stackoverflow.com/questions/40484942), to
+extend support to virtual environments created without the
+`--system-site-packages` flag.
 
 
 ## pypi
