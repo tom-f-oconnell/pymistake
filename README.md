@@ -113,8 +113,7 @@ directories to the `PYTHONPATH` in those environments.
 
 `pymistake` can be configured through environment variables. The available
 settings are:
-- `PYMISTAKE_DISABLE` default: `"0"`
-
+- `PYMISTAKE_DISABLE` default: `"0"`  
    options: `"1"` enabled, `"0"` disabled
 
    If enabled, this disables *all* features of `pymistake`. This is to quickly
@@ -125,22 +124,19 @@ settings are:
    PYMISTAKE_DISABLE="1" python <your-script>.py
    ```
 
-- `PYMISTAKE_DEBUG_UNCAUGHT` default: `"1"`
-
+- `PYMISTAKE_DEBUG_UNCAUGHT` default: `"1"`  
    options: `"1"` enabled, `"0"` disabled
 
    Set this to `"1"` if you want the modified tracebacks `pymistake` provides,
    without the automatic postmortem debugging of (most) uncaught exceptions.
 
-- `PYMISTAKE_TRACEBACK` default: `"1"`
-
+- `PYMISTAKE_TRACEBACK` default: `"1"`  
    options: `"1"` enabled, `"0"` disabled
 
    Set this to `"0"` if you want your Python's usual traceback formatting, but
    perhaps still want to use the automatic postmortem debugging.
 
-- `PYMISTAKE_DEV_DIRS` default: `[os.path.expanduser('~')]`
-
+- `PYMISTAKE_DEV_DIRS` default: `[os.path.expanduser('~')]`  
    options: any list of absolute paths, ':' separated.
    '~' is acceptable in paths.
 
@@ -148,8 +144,7 @@ settings are:
    `PYMISTAKE_NON_DEV_DIRS`), Python files under these "dev" directories
    will be highlighted in the modified traceback.
 
-- `PYMISTAKE_NON_DEV_DIRS` default: `['site-packages', 'dist-packages']`
-
+- `PYMISTAKE_NON_DEV_DIRS` default: `['site-packages', 'dist-packages']`  
    options: a list of paths as `PYMISTAKE_DEV_DIRS` above.
 
    Although by default, any Python file under your home directory will be 
