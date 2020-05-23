@@ -36,8 +36,10 @@ command in the debugger.
 ### Examples
 
 These examples were generated using the `example.py` in this repo, which also
-requires `pandas`. I had `ipdb` installed for the Python I used to generate
-these examples.
+requires `pandas`. The exact version of `pandas` specified in the
+`example_requirements.txt` should allow you to reproduce the example images
+below. I had `ipdb` installed for the Python I used to generate these examples,
+though `pdb` should also work, any will give you similar output.
 
 ![Example with all features enabled](docs/screenshots/enabled.png)
 In the above image, note the `>` character to the left of one of the pairs of
@@ -107,8 +109,8 @@ directories to the `PYTHONPATH` in those environments.
 
 ## Configuration
 
-`pymistake` can be configured through environment variables. The available
-settings are:
+Although the default configuration should be fine, `pymistake` can be configured
+through environment variables. The available settings are:
 - `PYMISTAKE_DISABLE` default: `"0"`  
    options: `"1"` enabled, `"0"` disabled
 
