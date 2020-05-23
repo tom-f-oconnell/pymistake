@@ -1,1 +1,3 @@
-pandas
+# This one produces a nice long traceback, with the last line in our code
+# appearing about midway through the traceback, with `example.py`.
+pandas==0.24.2

@@ -25,15 +25,12 @@ Errors of the type `SyntaxError` are not handled any differently, as generally
 you would not want either a debugger or a modified traceback for these, because
 they are generally in your code and happen immediately.
 
-If you have `ipdb` installed, the debugger will move "up" a number of frames
-until it is in a frame originating in one of your source code files. This
-feature is to expedite debugging around the point of the crash, as generally
-interaction with objects created in your code is more useful than starting the
-debugger deep in the calls of some library. These moves "up" are equivalent to
-manually entering the `u` command in the debugger. As I have not figured out how
-to silence the lines `ipdb` prints after each command, there will be a set of
-`ipdb` prompt lines for each of these moves up, in addition to the first set
-of lines when the postmortem debugger was started.
+The debugger will move "up" a number of frames until it is in a frame
+originating in one of your source code files. This feature is to expedite
+debugging around the point of the crash, as generally interaction with objects
+created in your code is more useful than starting the debugger deep in the calls
+of some library. These moves "up" are equivalent to manually entering the `u`
+command in the debugger.
 
 
 ### Examples
@@ -50,10 +47,9 @@ blank line following this section. These modifications are to make it more
 visually apparent where the offending part of *your* code is, as that's the code
 you most likely want to fix.
 
-Again in the image above, also note the two debugger prompts. There are two
-prompts, rather than one, because the debugger moved "up" one frame, as
-described in the previous section. If the last line in the traceback was a line
-in your code, the debugger would not move "up" at all.
+Also in the image above, note the debugger prompt. This should have been
+moved to focus on the part of the code that is highlighted in the modified
+traceback, so in the example, you can print out the `df` `DataFrame` object.
 
 ![Example all features disabled](docs/screenshots/disabled.png)
 
@@ -69,13 +65,7 @@ traceback formatting is still active.
 ![Example with only postmortem debugger enabled](docs/screenshots/no_traceback.png)
 
 In the above image, the custom traceback is disabled, but the automatic
-postmortem debugging of uncaught errors is enabled. One thing to note in this
-example is that the debugger did not move "up" one frame like in the first
-example . This is because a dependence of the code that counts how many frames
-to move up on the custom traceback printing code. I could potentially remove
-this limitation in the future, but for now, if you want the postmortem `ipdb`
-debugger to automatically move up so that it starts inside your code, you need
-to leave the custom traceback printing enabled.
+postmortem debugging of uncaught errors is enabled.
 
 
 ## Installation
@@ -192,6 +182,8 @@ print(site.ENABLE_USER_SITE)
 ...prints `False`. It seems that virtual environments created without the 
 `--system-site-packages` flag will have `site.ENABLE_USER_SITE == False`, and
 thus will *not* work.
+
+This variable is all that `check_python_compatibility.py` checks.
 
 It may be possible to implement what `usercustomize.py` is accomplishing with
 `.pth` files [like this](https://stackoverflow.com/questions/40484942), to

@@ -18,10 +18,56 @@ _emph_file_test_fn = None
 def set_file_filter(fn):
     """Takes a function that returns True or False for filename absolute paths.
 
-    Influences which parts of custom traceback will get special formatting.
+    Influences which parts of custom traceback will get special formatting and
+    which code the postmortem debugger will start executation in.
     """
     global _emph_file_test_fn 
     _emph_file_test_fn = fn
+
+
+# TODO make sure edge cases are handled correct (None mostly)
+def stack_summary2focus_frame_idx(stack_summary):
+    emphasis_idx = None
+    # TODO i should probably just err if this is `None` at this point...
+    if _emph_file_test_fn:
+        for i, frame_summary in enumerate(stack_summary):
+            if _debug:
+                print('frame_summary index:', i)
+                print('calling test fn: ', _emph_file_test_fn.__name__)
+                print()
+
+            should_emph = _emph_file_test_fn(frame_summary.filename)
+            if _debug:
+                print('{}({}) = {}'.format(_emph_file_test_fn.__name__,
+                    frame_summary.filename, should_emph
+                ))
+                print()
+
+            # As long as the comment above this loop stays true, no need to
+            # check anything else here.
+            if should_emph:
+                emphasis_idx = i
+
+    return emphasis_idx
+
+
+# TODO test edge cases
+def traceback2n_frames_to_skip(tb):
+    # TODO may need to hardcode limit=None
+    stack_summary = traceback.extract_tb(tb)
+    emphasis_idx = stack_summary2focus_frame_idx(stack_summary)
+
+    # TODO TODO probably just assert emphasis_idx is not None, and avoid
+    # setting former to 0 first? think about when it might need to be `None`
+    # though
+    n_frames_to_skip = 0
+    if emphasis_idx is not None:
+        # TODO was there some reason i couldn't count this with a separate fn?
+        # try to factor out, so printing can be left to default without losing 
+        # the ability to compute this!!!
+        n_frames_to_skip = (len(stack_summary) - 1) - emphasis_idx
+
+    return n_frames_to_skip
 
 
 def style(s, fg_color_str_or_dict):
@@ -78,14 +124,12 @@ def style(s, fg_color_str_or_dict):
 #   erics_vim_syntax_and_color_highlighting/blob/master/usercustomize.py
 # https://github.com/nir0s/backtrace
 
-_n_frames_to_skip = None
 def format_exception(etype, value, tb, limit=None,
     emphasis_prefix='>', deemphasis_prefix=' ',
     emphasis_prefix_replace=True, deemphasis_prefix_replace=False,
     emphasis_prefix_style=None, emphasis_line_style=None,
     deemphasis_line_style=None, post_emphasis_delim='\n', pre_err_delim='\n',
-    stack_summary2lines_fn=None, preformat_lines_fn=None,
-    files_to_emphasize=None):
+    stack_summary2lines_fn=None, preformat_lines_fn=None):
     """
     Args:
     stack_summary2lines_fn (function): If specified, this is called on the
@@ -95,12 +139,6 @@ def format_exception(etype, value, tb, limit=None,
     See `style` for appropriate input to `*_style` kwargs.
     """
     # etype and value are only used at the end, not in formatting traceback.
-    global _n_frames_to_skip
-
-    if files_to_emphasize is None:
-        files_to_emphasize = _emph_file_test_fn
-    emph_file_test_fn = files_to_emphasize
-    del files_to_emphasize
 
     if emphasis_prefix_style is None:
         emphasis_prefix_style = {'fg': 'red', 'attr': 'bold'}
@@ -113,36 +151,7 @@ def format_exception(etype, value, tb, limit=None,
 
     # A stack summary is *like* a list of FrameSummary objects.
     stack_summary = traceback.extract_tb(tb, limit=limit)
-
-    # Not currently planning to do anything different in the case where the
-    # traceback might pass from lines w/ `emph_file_test_fn` True, then False,
-    # then back to True.
-    emphasis_idx = None
-    if emph_file_test_fn:
-        for i, frame_summary in enumerate(stack_summary):
-            if _debug:
-                print('frame_summary index:', i)
-                print('calling test fn: ', emph_file_test_fn.__name__)
-                print()
-
-            should_emph = emph_file_test_fn(frame_summary.filename)
-            if _debug:
-                print('{}({}) = {}'.format(emph_file_test_fn.__name__,
-                    frame_summary.filename, should_emph
-                ))
-                print()
-
-            # As long as the comment above this loop stays true, no need to
-            # check anything else here.
-            if should_emph:
-                emphasis_idx = i
-
-    _n_frames_to_skip = 0
-    if emphasis_idx is not None:
-        # TODO was there some reason i couldn't count this with a separate fn?
-        # try to factor out, so printing can be left to default without losing 
-        # the ability to compute this!!!
-        _n_frames_to_skip = (len(stack_summary) - 1) - emphasis_idx
+    emphasis_idx = stack_summary2focus_frame_idx(stack_summary)
 
     stylized_emph_prefix = style(emphasis_prefix, emphasis_prefix_style)
     def modify_line(single_line, emph=True):
@@ -255,13 +264,11 @@ STDOUT_TO_NULL_IN_INTERACT = True
 
 # TODO summarize how this function works
 # Copied from cpython pdb source.
-def pdb_interaction(self, frame, traceback):
+def pdb_interaction(self, frame, tb):
     """
     Same as in cpython `pdb` source, except manipulation of `sys.stdout`
     (and, in the case where `ipdb` is not available, of `.pdbrc`).
     """
-    global _n_frames_to_skip
-
     from pdb import Pdb
     import signal
 
@@ -287,13 +294,19 @@ def pdb_interaction(self, frame, traceback):
         have_ipdb = True
     except (ModuleNotFoundError, ImportError) as e:
         have_ipdb = False
-        assert _n_frames_to_skip is not None, 'call format_exception first'
-        cmd_lines = ['u'] * _n_frames_to_skip
+
+        n_frames_to_skip = traceback2n_frames_to_skip(tb)
+        # TODO test that this is not also run on further iterations of the
+        # debugger command line REPL
+        cmd_lines = ['u'] * n_frames_to_skip
+        # TODO TODO maybe set last command to something like a no-op, so that
+        # pressing enter without explicitly entering "u" doesn't have the effect
+        # of "u" b/c it was the last command
         self.rcLines.extend(cmd_lines)
 
     # This is the line that ultimately excecute commands in ~/.pdbrc
     # (or lines that we manually add to self.rcLines, in this case)
-    if self.setup(frame, traceback):
+    if self.setup(frame, tb):
         # no interaction desired at this time (happens if .pdbrc contains
         # a command like "continue")
         # TODO what is the .forget() call really doing though?
@@ -309,10 +322,6 @@ def pdb_interaction(self, frame, traceback):
         self.stdout = sys.stdout
 
     self.print_stack_entry(self.stack[self.curindex])
-    # TODO TODO double check that it's not a problem for the `ipdb` case to set
-    # this to `None` here. if it is, could maybe just only set this in the `pdb`
-    # case?
-    _n_frames_to_skip = None
     self._cmdloop()
     self.forget()
 
@@ -340,10 +349,6 @@ def excepthook(etype, value, tb):
             default=True
         )
         if custom_print_exception:
-            # TODO TODO TODO document ways in which moving the debugger up the
-            # correct number of frames depends on this custom printing function
-            # (and try to rewrite so there is no such dependence)
-            # (rewriting is more important than documenting, if possible)
             print_exception(etype, value, tb)
         else:
             traceback.print_exception(etype, value, tb)
@@ -365,11 +370,11 @@ def excepthook(etype, value, tb):
             monkey_patch_ipdb()
             from ipdb import post_mortem
 
-            if _debug:
-                print('JUST BEFORE CALLING IPDB.POST_MORTEM(tb, ...)')
-
-            assert _n_frames_to_skip is not None, 'call format_exception first'
-            post_mortem(tb, commands=['u'] * _n_frames_to_skip)
+            n_frames_to_skip = traceback2n_frames_to_skip(tb)
+            # TODO see note where `pdb` command list is constructed about
+            # maybe adding a no-op command at end to prevent enter from
+            # causing expected "u" commands
+            post_mortem(tb, commands=['u'] * n_frames_to_skip)
 
         # TODO is there some python version where this really was supposed to be
         # an ImportError, rather than a ModuleNotFoundError?? what is the
