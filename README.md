@@ -36,7 +36,7 @@ command in the debugger.
 ### Examples
 
 These examples were generated using the `example.py` in this repo, which also
-requires `pandas`. The exact version of `pandas` specified in the
+requires `pandas`. The exact version of `pandas` specified in
 `example_requirements.txt` should allow you to reproduce the example images
 below. I had `ipdb` installed for the Python I used to generate these examples,
 though `pdb` should also work, any will give you similar output.
