@@ -25,7 +25,7 @@ def get_bool_env_var(var, default=True):
             val = default
             valid_flag = False
 
-        if valid_flag and val not in (0, 1):
+        if valid_flag and val not in (True, False):
             valid_flag = False
 
         if not valid_flag:
@@ -349,21 +349,26 @@ def excepthook(etype, value, tb):
         # formatting is just coloring.
         sys.__excepthook__(etype, value, tb)
     else:
-        print_exception(etype, value, tb)
+        custom_print_exception = get_bool_env_var('PYMISTAKE_TRACEBACK',
+            default=True
+        )
+        if custom_print_exception:
+            # TODO TODO TODO document ways in which moving the debugger up the
+            # correct number of frames depends on this custom printing function
+            # (and try to rewrite so there is no such dependence)
+            print_exception(etype, value, tb)
+        else:
+            traceback.print_exception(etype, value, tb)
 
         start_post_mortem = get_bool_env_var('PYMISTAKE_DEBUG_UNCAUGHT',
             default=True
         )
         if not start_post_mortem:
             return 
-        try:
-            start_post_mortem = bool(int(start_post_mortem))
-            if not start_post_mortem:
-                return
-        except ValueError:
-            return
         del start_post_mortem
 
+        # TODO is this also necessary for ipdb case? i think it was, but
+        # double check, and only run if needed
         monkey_patch_pdb()
         try:
             # This will trigger the same ImportError.
@@ -390,7 +395,6 @@ def excepthook(etype, value, tb):
                     _n_frames_to_skip
                 ))
             '''
-
             # TODO possible to pass commands here? i don't feel like it was...
             post_mortem(tb)
 

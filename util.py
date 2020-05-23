@@ -2,8 +2,9 @@
 from __future__ import print_function
 
 import os
-from os.path import expanduser, abspath, normpath, join, split, isdir
+from os.path import expanduser, abspath, normpath, dirname, join, split, isdir
 import sys
+import site
 import warnings
 
 
@@ -19,6 +20,39 @@ def script_is_attended():
         sys.__stdout__.isatty(),
         sys.__stderr__.isatty()
     ])
+
+
+def is_pymistake_installed(user_site_warning=True):
+    if not site.ENABLE_USER_SITE:
+        return False
+
+    try:
+        user_paths = os.environ['PYTHONPATH'].split(os.pathsep)
+    except KeyError:
+        user_paths = []
+
+    pymistake_dir = dirname(normpath(abspath(__file__)))
+    assert isdir(pymistake_dir)
+    in_pythonpath = False
+    for p in user_paths:
+        if normpath(abspath(p)) == pymistake_dir:
+            in_pythonpath = True
+            break
+
+    if not site.ENABLE_USER_SITE:
+        if user_site_warning:
+            # TODO change pymistake to use .pth files to get hook, and test
+            # that method does not depend on the --system-site-packages setting
+            # (+ change install instructions to just ref. pip installing the
+            # package then, as changing PYTHONPATH shouldn't be necessary)
+            warnings.warn('pymistake relies on usercustomize.py, which is not '
+                'loaded in virtual environments created without the '
+                '--system-site-packages. Make new virtual environment with this'
+                ' flag.'
+            )
+        return False
+
+    return in_pythonpath
 
 
 def envvar_dir_list(env_var, default):
@@ -163,8 +197,8 @@ def is_dev_file(f, _debug=False):
         print(f, 'IS_DEV_FILE?')
 
     if dev_dirs is None or non_dev_dirs is None:
-        dev_dirs = envvar_dir_list('PYTHON_DEV_DIRS', [expanduser('~')])
-        non_dev_dirs = envvar_dir_list('PYTHON_NON_DEV_DIRS',
+        dev_dirs = envvar_dir_list('PYMISTAKE_DEV_DIRS', [expanduser('~')])
+        non_dev_dirs = envvar_dir_list('PYMISTAKE_NON_DEV_DIRS',
             ['site-packages', 'dist-packages']
         )
         if _debug:
