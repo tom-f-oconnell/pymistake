@@ -79,7 +79,6 @@ to leave the custom traceback printing enabled.
 
 
 ## Installation
-
 Put these scripts in a directory on `PYTHONPATH` to get better stack traces.
 
 If you don't know how to do the above, I'll explain. First, clone this repo:
@@ -87,6 +86,10 @@ If you don't know how to do the above, I'll explain. First, clone this repo:
 cd ~/src # or other directory where you keep all of your data analysis git repos
 git clone git://github.com/tom-f-oconnell/pymistake
 ```
+
+Now, run `~/src/pymistake/check_python_compatibility.py`. It will tell you if
+the Python you use to run it will work with `pymistake`. This script must
+indicate your Python is supported, or else the following steps will not work.
 
 Then, if you are using a `bash` shell, you can add these scripts to your
 `PYTHONPATH` by opening your `~/.bashrc` in a text editor, and adding these
@@ -177,11 +180,6 @@ defined in `util.py` for details on how an interactive session is detected.
 I aimed to make this work in any python above a modern release of `python2.7`,
 including any `python3`, but there may be certain pythons where `pymistake` has
 unexpected behavior.
-
-I also aim to support both `pdb` (the standard library debugger) and `ipdb`
-(which needs to be installed separately), for the postmortem debugging, but have
-mainly tested this myself with `ipdb`. Please make a Github issue if any of the 
-support for `pdb` does not appear to work for you.
 
 
 ## Virtual Environments
